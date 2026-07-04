@@ -1,26 +1,95 @@
 # Trace2Policy
 
-Trace2Policy is an early-stage open-source project workspace.
+Convert AI agent traces into enforceable least-privilege policies.
+
+Trace2Policy ingests AI agent traces, normalizes them to a canonical trace IR,
+builds a capability graph, synthesizes policy, emits YAML/Rego, generates
+offline red-team mutations, and reports whether the policy blocks those
+mutations.
 
 ## Status
 
-This repository is being prepared for initial project development. Public APIs,
-architecture, and contribution process are not final yet.
+Trace2Policy is alpha software. The v0.1 CLI is usable for local experiments,
+examples, and policy synthesis research. Public APIs may still change.
+
+## Install
+
+Recommended development workflow:
+
+```bash
+uv sync --all-extras
+uv run trace2policy --help
+```
+
+Fallback:
+
+```bash
+pip install -e ".[dev,test]"
+trace2policy --help
+```
+
+## Quickstart
+
+```bash
+trace2policy validate examples/github_issue_triage/traces.normal.jsonl
+
+trace2policy graph examples/github_issue_triage/traces.normal.jsonl \
+  --format mermaid \
+  --out graph.md
+
+trace2policy infer examples/github_issue_triage/traces.normal.jsonl \
+  --out policy.yaml
+
+trace2policy emit policy.yaml \
+  --target rego \
+  --out policy.rego
+
+trace2policy redteam generate examples/github_issue_triage/traces.normal.jsonl \
+  --out attacks.jsonl
+
+trace2policy test \
+  --policy policy.yaml \
+  --positive examples/github_issue_triage/traces.normal.jsonl \
+  --negative attacks.jsonl \
+  --out results.json
+
+trace2policy report results.json \
+  --format markdown \
+  --out report.md
+```
+
+## Inputs
+
+Supported v0.1 inputs:
+
+- canonical Trace2Policy JSONL
+- OpenInference-like JSON spans
+- Langfuse-like JSON exports
+
+The canonical schema is documented in
+[docs/canonical_trace_schema.md](docs/canonical_trace_schema.md).
+
+## Security Defaults
+
+- Default decision is deny.
+- Unknown trust is treated as untrusted.
+- Unknown sensitivity is treated as internal.
+- Raw prompt/output content is not persisted by default.
+- Red-team replay is offline and does not call live tools.
+- YAML policies are parsed with safe loading.
 
 ## Development
 
-Project setup instructions will be added once the implementation stack is
-selected.
+```bash
+uv run ruff check
+uv run ruff format --check
+uv run mypy src tests
+uv run pytest
+uv build
+```
 
-## Contributing
-
-External contributions should wait until the contribution process is finalized.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the current guidelines.
-
-## Security
-
-Please do not open public issues for sensitive vulnerabilities. See
-[SECURITY.md](SECURITY.md) for the current reporting policy.
+OPA is optional for local development. If `opa` is installed, the Rego parity
+test also runs.
 
 ## License
 

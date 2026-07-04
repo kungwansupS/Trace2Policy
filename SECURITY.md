@@ -1,6 +1,7 @@
 # Security Policy
 
-Trace2Policy is in early setup and does not yet have released versions.
+Trace2Policy v0.1 is alpha software. Security fixes are accepted for supported
+versions listed below.
 
 ## Reporting a Vulnerability
 
@@ -10,4 +11,7 @@ through GitHub.
 
 ## Supported Versions
 
-No versions are currently supported.
+| Version | Supported |
+|---------|-----------|
+| 0.1.x   | Yes       |
+| < 0.1   | No        |

@@ -2,18 +2,42 @@
 
 Thanks for your interest in Trace2Policy.
 
-This project is not ready to accept substantial external contributions yet.
-Before accepting broad contributions, the maintainers should finalize:
+Trace2Policy v0.1 accepts focused contributions: bug fixes, tests, docs, and
+small improvements that match the current scope (offline trace-to-policy
+synthesis and replay testing).
 
-- project scope and architecture
-- supported development environment
-- code style and test expectations
-- review and release process
+## Development Setup
 
-## Local Changes
+```bash
+uv sync --all-extras
+uv run trace2policy --help
+```
 
-When development starts, contributors should keep changes focused, include tests
-for behavior changes, and avoid unrelated formatting or generated-file churn.
+Fallback:
+
+```bash
+pip install -e ".[dev,test]"
+```
+
+## Quality Checks
+
+Before opening a pull request, run:
+
+```bash
+uv run ruff check
+uv run ruff format --check
+uv run mypy src tests
+uv run pytest
+uv build
+```
+
+OPA is optional locally. CI installs OPA and runs the Rego parity test.
+
+## Guidelines
+
+- Keep changes focused and include tests for behavior changes.
+- Avoid unrelated formatting or generated-file churn.
+- Match existing code style and module boundaries.
 
 ## License Notice
 
