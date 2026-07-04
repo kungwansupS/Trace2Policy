@@ -9,6 +9,13 @@
 *.log
 logs/
 
+# Local-only notes
+AGENTS.md
+AGENT.md
+agents.md
+agent.md
+.codex/
+
 # OS and editor files
 .DS_Store
 Thumbs.db
