@@ -2,13 +2,12 @@
 
 Thanks for your interest in Trace2Policy.
 
-This project is not ready to accept external contributions yet. Before accepting
-contributions, the maintainers should finalize:
+This project is not ready to accept substantial external contributions yet.
+Before accepting broad contributions, the maintainers should finalize:
 
 - project scope and architecture
 - supported development environment
 - code style and test expectations
-- open-source license
 - review and release process
 
 ## Local Changes
@@ -18,4 +17,5 @@ for behavior changes, and avoid unrelated formatting or generated-file churn.
 
 ## License Notice
 
-Do not submit external contributions until a project license is published.
+Unless explicitly stated otherwise, contributions intentionally submitted for
+inclusion in this repository are licensed under the Apache License, Version 2.0.

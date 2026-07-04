@@ -5,7 +5,7 @@ Trace2Policy is an early-stage open-source project workspace.
 ## Status
 
 This repository is being prepared for initial project development. Public APIs,
-architecture, contribution process, and license terms are not final yet.
+architecture, and contribution process are not final yet.
 
 ## Development
 
@@ -14,9 +14,8 @@ selected.
 
 ## Contributing
 
-External contributions should wait until the project license and contribution
-policy are finalized. See [CONTRIBUTING.md](CONTRIBUTING.md) for the current
-guidelines.
+External contributions should wait until the contribution process is finalized.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the current guidelines.
 
 ## Security
 
@@ -25,5 +24,9 @@ Please do not open public issues for sensitive vulnerabilities. See
 
 ## License
 
-No open-source license has been selected yet. Until a license is added, this
-repository is public source, not fully open source for reuse or redistribution.
+This repository is licensed under the Apache License, Version 2.0. See
+[LICENSE](LICENSE).
+
+Unless a more specific license file is added later for a subdirectory or file,
+the Apache-2.0 license applies to the whole repository, including source code,
+documentation, examples, and configuration.
