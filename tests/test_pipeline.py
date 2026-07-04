@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from trace2policy import models as trace_models
 from trace2policy.graph import build_capability_graph, graph_to_mermaid
 from trace2policy.ingest import normalize_trace
 from trace2policy.io import load_events, load_policy, write_jsonl, write_policy
@@ -112,6 +113,39 @@ def test_policy_blocks_scope_creep_and_secret_reads() -> None:
     assert public_write.decision == "requires_approval"
 
 
+def test_human_approved_high_impact_action_is_allowed() -> None:
+    events = load_events(GITHUB_TRACE)
+    policy = synthesize_policy_from_events(events)
+    attack = next(
+        event
+        for event in generate_attacks(events)
+        if event.expected and event.expected.attack == "unsafe_public_write"
+    )
+    attack.decision.human_approved = True
+
+    decision = evaluate_policy(policy, event_to_decision_input(attack))
+
+    assert decision.decision == "allow"
+
+
+def test_private_network_egress_is_denied() -> None:
+    events = load_events(GITHUB_TRACE)
+    policy = synthesize_policy_from_events(events)
+    event = events[0].model_copy(deep=True)
+    event.operation.system = "http"
+    event.operation.action = "http.post"
+    event.operation.tool_name = "http.post"
+    event.operation.resource_id = "http://127.0.0.1/admin"
+    event.output.sink = "external_http"
+    event.input.sensitivity = "internal"
+    event.input.labels = []
+
+    decision = evaluate_policy(policy, event_to_decision_input(event))
+
+    assert decision.decision == "deny"
+    assert "Private network egress" in "; ".join(decision.deny_reasons)
+
+
 def test_rego_emitter_contains_v1_policy() -> None:
     policy = synthesize_policy_from_events(load_events(GITHUB_TRACE))
     rego = emit_rego(policy)
@@ -126,12 +160,31 @@ def test_rego_decision_matches_native_evaluator() -> None:
     events = load_events(GITHUB_TRACE)
     policy = synthesize_policy_from_events(events)
     rego = emit_rego(policy)
-    decision_input = event_to_decision_input(events[-1])
+    attacks = generate_attacks(events)
+    approved = next(
+        event.model_copy(deep=True)
+        for event in attacks
+        if event.expected and event.expected.attack == "unsafe_public_write"
+    )
+    approved.decision.human_approved = True
+    label_only_exfil = events[0].model_copy(deep=True)
+    label_only_exfil.operation.system = "http"
+    label_only_exfil.operation.action = "http.post"
+    label_only_exfil.operation.tool_name = "http.post"
+    label_only_exfil.operation.resource_id = "https://unknown.example/upload"
+    label_only_exfil.output.sink = "external_http"
+    label_only_exfil.input.sensitivity = "internal"
+    label_only_exfil.input.labels = ["customer_data"]
+    private_egress = label_only_exfil.model_copy(deep=True)
+    private_egress.operation.resource_id = "http://127.0.0.1/admin"
+    private_egress.input.labels = []
 
-    native = evaluate_policy(policy, decision_input)
-    from_rego = evaluate_rego(rego, decision_input)
+    for event in [*events, *attacks, approved, label_only_exfil, private_egress]:
+        decision_input = event_to_decision_input(event)
+        native = evaluate_policy(policy, decision_input)
+        from_rego = evaluate_rego(rego, decision_input)
 
-    assert from_rego.decision == native.decision
+        assert from_rego.decision == native.decision
 
 
 def test_yaml_loader_rejects_unsafe_constructors(tmp_path: Path) -> None:
@@ -156,3 +209,40 @@ def test_raw_content_is_not_persisted_in_normalized_events(tmp_path: Path) -> No
 
     assert event.input.content_ref is not None
     assert event.input.content_preview is None
+
+
+def test_ingest_validation_errors_include_line_context(tmp_path: Path) -> None:
+    source = tmp_path / "trace.jsonl"
+    source.write_text(
+        '{"trace_id":"tr","span_id":"sp","task_id":"t","event_type":"tool_call",'
+        '"operation":{"action":" "}}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(trace_models.TraceValidationError) as exc_info:
+        normalize_trace(source, "jsonl")
+
+    assert str(source) in str(exc_info.value)
+    assert ":1:" in str(exc_info.value)
+
+
+def test_report_redacts_secret_like_values() -> None:
+    results = trace_models.TestResults(
+        policy_id="demo",
+        policy_hash="sha256:test",
+        negative=[
+            trace_models.TestCaseResult(
+                name="token=abc123",
+                expected="deny",
+                actual="allow",
+                passed=False,
+                reasons=["api_key=secret-value should not appear"],
+            )
+        ],
+    )
+
+    report = render_markdown(results)
+
+    assert "abc123" not in report
+    assert "secret-value" not in report
+    assert "[REDACTED_SECRET]" in report

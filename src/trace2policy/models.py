@@ -200,6 +200,7 @@ class DecisionResource(BaseModel):
     repo: str | None = None
     path: str | None = None
     domain: str | None = None
+    private_network: bool = False
     visibility: str | None = None
 
 

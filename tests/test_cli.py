@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -57,6 +58,25 @@ def test_cli_full_pipeline(tmp_path: Path) -> None:
         ).exit_code
         == 0
     )
+    if shutil.which("opa") is not None:
+        rego_results = tmp_path / "results-rego.json"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "test",
+                    "--policy",
+                    str(rego),
+                    "--positive",
+                    str(normalized),
+                    "--negative",
+                    str(attacks),
+                    "--out",
+                    str(rego_results),
+                ],
+            ).exit_code
+            == 0
+        )
     assert (
         runner.invoke(
             app, ["report", str(results), "--format", "markdown", "--out", str(report)]

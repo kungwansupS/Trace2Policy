@@ -20,17 +20,16 @@ def emit_rego(policy: Policy) -> str:
         "",
         "default allow := false",
         "",
+        *_sensitive_input_helpers(),
     ]
     for deny_rule in policy.deny:
         lines.extend(_deny_rule(deny_rule.id, deny_rule.when, deny_rule.reason))
     for approval_rule in policy.require_human_approval:
+        payload = approval_rule.model_dump(mode="json", exclude_none=True)
         lines.extend(
-            _approval_rule(
-                approval_rule.id,
-                approval_rule.action,
-                approval_rule.reason or "Action requires human approval",
-            )
+            _approval_rule(payload, approval_rule.reason or "Action requires human approval")
         )
+        lines.extend(_approved_allow_rule(payload))
     for allow_rule in policy.allow:
         lines.extend(_allow_rule(allow_rule.model_dump(mode="json", exclude_none=True)))
     return "\n".join(lines).rstrip() + "\n"
@@ -88,18 +87,29 @@ def _deny_rule(rule_id: str, when: dict[str, Any], reason: str) -> list[str]:
     ]
 
 
-def _approval_rule(rule_id: str, action: str, reason: str) -> list[str]:
+def _approval_rule(rule: dict[str, Any], reason: str) -> list[str]:
+    conditions = ["count(deny) == 0", *_rule_match_conditions(rule), "not input.human_approved"]
     return [
         f"requires_approval contains {json.dumps(reason)} if {{",
-        f"  input.action == {json.dumps(action)}",
-        "  not input.human_approved",
+        *[f"  {condition}" for condition in conditions],
         "}",
         "",
     ]
 
 
+def _approved_allow_rule(rule: dict[str, Any]) -> list[str]:
+    conditions = ["count(deny) == 0", *_rule_match_conditions(rule), "input.human_approved"]
+    return ["allow if {", *[f"  {condition}" for condition in conditions], "}", ""]
+
+
 def _allow_rule(rule: dict[str, Any]) -> list[str]:
     conditions = ["count(deny) == 0", "count(requires_approval) == 0"]
+    conditions.extend(_rule_match_conditions(rule))
+    return ["allow if {", *[f"  {condition}" for condition in conditions], "}", ""]
+
+
+def _rule_match_conditions(rule: dict[str, Any]) -> list[str]:
+    conditions: list[str] = []
     if subject := rule.get("subject"):
         conditions.append(f"input.subject == {json.dumps(subject)}")
     conditions.append(f"input.action == {json.dumps(rule['action'])}")
@@ -111,7 +121,7 @@ def _allow_rule(rule: dict[str, Any]) -> list[str]:
         conditions.append(f"input.params.label in {labels_set}")
     if query := constraints.get("query"):
         conditions.append(f"input.params.query == {json.dumps(query)}")
-    return ["allow if {", *[f"  {condition}" for condition in conditions], "}", ""]
+    return conditions
 
 
 def _when_conditions(when: dict[str, Any]) -> list[str]:
@@ -125,7 +135,7 @@ def _when_conditions(when: dict[str, Any]) -> list[str]:
             conditions.append(f"input.input.sensitivity == {json.dumps(expected)}")
         elif key == "input.sensitivity_in":
             values = "{" + ", ".join(json.dumps(item) for item in expected) + "}"
-            conditions.append(f"input.input.sensitivity in {values}")
+            conditions.append(f"sensitive_input({values})")
         elif key == "input.labels_contains":
             conditions.append(f"{json.dumps(expected)} in input.input.labels")
         elif key == "sink":
@@ -136,7 +146,23 @@ def _when_conditions(when: dict[str, Any]) -> list[str]:
                 "some pattern in [" + ", ".join(json.dumps(regex) for regex in regexes) + "]"
             )
             conditions.append("regex.match(pattern, input.resource.path)")
+        elif key == "resource.private_network":
+            conditions.append(f"input.resource.private_network == {json.dumps(expected)}")
     return conditions or ["false"]
+
+
+def _sensitive_input_helpers() -> list[str]:
+    return [
+        "sensitive_input(values) if {",
+        "  input.input.sensitivity in values",
+        "}",
+        "",
+        "sensitive_input(values) if {",
+        "  some label in input.input.labels",
+        "  label in values",
+        "}",
+        "",
+    ]
 
 
 def _resource_conditions(resource: str) -> list[str]:

@@ -5,6 +5,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import ValidationError
+
 from trace2policy.io import read_json_file, read_jsonl
 from trace2policy.labels import classify_event
 from trace2policy.models import (
@@ -15,6 +17,7 @@ from trace2policy.models import (
     EventType,
     Operation,
     RuntimeMeta,
+    TraceValidationError,
 )
 
 TraceFormat = Literal["jsonl", "openinference", "langfuse"]
@@ -23,7 +26,12 @@ TraceFormat = Literal["jsonl", "openinference", "langfuse"]
 def normalize_trace(path: Path, trace_format: TraceFormat) -> list[Event]:
     if trace_format == "jsonl":
         raw_events = read_jsonl(path)
-        events = [_canonicalize_event(row, index) for index, row in enumerate(raw_events, 1)]
+        events = []
+        for index, row in enumerate(raw_events, 1):
+            try:
+                events.append(_canonicalize_event(row, index))
+            except ValidationError as exc:
+                raise TraceValidationError(str(path), index, str(exc)) from exc
     elif trace_format == "openinference":
         events = list(_from_openinference(read_json_file(path)))
     elif trace_format == "langfuse":

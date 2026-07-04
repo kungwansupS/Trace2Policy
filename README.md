@@ -53,6 +53,12 @@ trace2policy test \
   --negative attacks.jsonl \
   --out results.json
 
+trace2policy test \
+  --policy policy.rego \
+  --positive examples/github_issue_triage/traces.normal.jsonl \
+  --negative attacks.jsonl \
+  --out results-rego.json
+
 trace2policy report results.json \
   --format markdown \
   --out report.md
@@ -77,6 +83,8 @@ The canonical schema is documented in
 - Raw prompt/output content is not persisted by default.
 - Red-team replay is offline and does not call live tools.
 - YAML policies are parsed with safe loading.
+- Secret-looking values are redacted from reports.
+- External HTTP egress to private network destinations is denied.
 
 ## Development
 

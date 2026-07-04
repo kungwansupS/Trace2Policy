@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 
 from trace2policy.models import TestResults
+from trace2policy.redact import redact_secret_text
 
 
 def render_markdown(results: TestResults) -> str:
@@ -30,10 +31,12 @@ def render_markdown(results: TestResults) -> str:
         for case in missed:
             reason = "; ".join(case.reasons) if case.reasons else "no reason"
             lines.append(
-                f"- `{case.name}` expected `{case.expected}` but got `{case.actual}`: {reason}"
+                "- "
+                f"`{redact_secret_text(case.name)}` expected `{case.expected}` "
+                f"but got `{case.actual}`: {redact_secret_text(reason)}"
             )
         lines.append("")
-    return "\n".join(lines)
+    return redact_secret_text("\n".join(lines))
 
 
 def render_html(results: TestResults) -> str:

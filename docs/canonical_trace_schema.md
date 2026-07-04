@@ -23,3 +23,8 @@ Important nested fields:
 
 Raw prompt, output, tool arguments, and tool results are not stored by default.
 Use `content_ref` hashes and labels for policy synthesis.
+
+Policy tests convert events into decision inputs with `subject`, `action`,
+`resource`, `input`, `sink`, `params`, and `human_approved`. URL resources also
+derive `resource.domain` and `resource.private_network` for offline egress
+checks.
