@@ -1,0 +1,56 @@
+{
+  "spans": [
+    {
+      "trace_id": "oi-trace",
+      "span_id": "agent-1",
+      "attributes": {
+        "openinference.span.kind": "AGENT",
+        "name": "triage_agent",
+        "session.id": "openinference_task"
+      }
+    },
+    {
+      "trace_id": "oi-trace",
+      "span_id": "llm-1",
+      "parent_span_id": "agent-1",
+      "attributes": {
+        "openinference.span.kind": "LLM",
+        "name": "llm.generate",
+        "llm.model_name": "example-model",
+        "input.value": [{"role": "user", "content": "redacted"}],
+        "output.value": "redacted"
+      }
+    },
+    {
+      "trace_id": "oi-trace",
+      "span_id": "tool-1",
+      "parent_span_id": "agent-1",
+      "attributes": {
+        "openinference.span.kind": "TOOL",
+        "tool.name": "github.issue.read",
+        "resource.type": "github.issue",
+        "resource.id": "owner/project#123"
+      }
+    },
+    {
+      "trace_id": "oi-trace",
+      "span_id": "retriever-1",
+      "parent_span_id": "agent-1",
+      "attributes": {
+        "openinference.span.kind": "RETRIEVER",
+        "name": "knowledge_base",
+        "resource.type": "vector_index",
+        "resource.id": "kb/support"
+      }
+    },
+    {
+      "trace_id": "oi-trace",
+      "span_id": "guardrail-1",
+      "parent_span_id": "agent-1",
+      "attributes": {
+        "openinference.span.kind": "GUARDRAIL",
+        "name": "pii_filter"
+      }
+    }
+  ]
+}

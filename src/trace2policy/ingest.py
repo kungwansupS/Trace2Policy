@@ -5,6 +5,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import ValidationError
+
 from trace2policy.io import read_json_file, read_jsonl
 from trace2policy.labels import classify_event
 from trace2policy.models import (
@@ -15,6 +17,7 @@ from trace2policy.models import (
     EventType,
     Operation,
     RuntimeMeta,
+    TraceValidationError,
 )
 
 TraceFormat = Literal["jsonl", "openinference", "langfuse"]
@@ -23,7 +26,12 @@ TraceFormat = Literal["jsonl", "openinference", "langfuse"]
 def normalize_trace(path: Path, trace_format: TraceFormat) -> list[Event]:
     if trace_format == "jsonl":
         raw_events = read_jsonl(path)
-        events = [_canonicalize_event(row, index) for index, row in enumerate(raw_events, 1)]
+        events = []
+        for index, row in enumerate(raw_events, 1):
+            try:
+                events.append(_canonicalize_event(row, index))
+            except ValidationError as exc:
+                raise TraceValidationError(str(path), index, str(exc)) from exc
     elif trace_format == "openinference":
         events = list(_from_openinference(read_json_file(path)))
     elif trace_format == "langfuse":
@@ -182,12 +190,16 @@ def _infer_event_type(operation: dict[str, Any]) -> str:
 
 
 def _openinference_event_type(span_kind: str, action: str | None) -> EventType:
+    if span_kind == "AGENT":
+        return EventType.AGENT
     if span_kind == "LLM":
         return EventType.LLM_CALL
     if span_kind == "RETRIEVER":
         return EventType.RETRIEVAL
     if span_kind == "TOOL":
         return EventType.TOOL_CALL
+    if span_kind == "GUARDRAIL":
+        return EventType.GUARDRAIL
     if action:
         return EventType(_infer_event_type({"action": action}))
     return EventType.TOOL_CALL
@@ -204,10 +216,14 @@ def _langfuse_event_type(item_type: str, name: str) -> EventType:
 def _normalize_action(name: str, event_type: EventType) -> str:
     if "." in name:
         return name
+    if event_type == EventType.AGENT:
+        return "agent.run"
     if event_type == EventType.LLM_CALL:
         return "llm.generate"
     if event_type == EventType.RETRIEVAL:
         return "retrieval.query"
+    if event_type == EventType.GUARDRAIL:
+        return "guardrail.check"
     return name
 
 

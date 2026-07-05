@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 import json
 import re
+from collections.abc import Callable
+from ipaddress import ip_address
 from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
+from trace2policy.conditions import condition_matches, egress_decision, validate_policy_contract
 from trace2policy.graph import Capability, CapabilityGraph, build_capability_graph
 from trace2policy.labels import is_high_impact_action, is_secret_path
 from trace2policy.models import (
@@ -23,6 +25,7 @@ from trace2policy.models import (
     TestResults,
     utc_now,
 )
+from trace2policy.redact import redact_json_value
 
 SENSITIVE_LABELS = {"credential", "secret", "pii", "customer_data", "financial", "health", "legal"}
 
@@ -63,6 +66,11 @@ def default_deny_rules() -> list[DenyRule]:
             reason="Sensitive content cannot be sent to external HTTP sinks",
         ),
         DenyRule(
+            id="no_private_network_egress",
+            when={"sink": "external_http", "resource.private_network": True},
+            reason="Private network egress is outside task scope",
+        ),
+        DenyRule(
             id="no_secret_file_read",
             when={"action": "file.read", "resource.matches": ["**/.env", "**/.env.*", "~/.ssh/**"]},
             reason="Secret files are outside task scope",
@@ -93,19 +101,26 @@ def event_to_decision_input(event: Event) -> DecisionInput:
 
 
 def evaluate_policy(policy: Policy, decision_input: DecisionInput) -> DecisionResult:
+    validate_policy_contract(policy)
     deny_reasons: list[str] = []
     matched: list[str] = []
     for deny_rule in policy.deny:
-        if _matches_when(deny_rule.when, decision_input):
+        if condition_matches(deny_rule.when, decision_input):
             deny_reasons.append(deny_rule.reason)
             matched.append(deny_rule.id)
+    egress = egress_decision(policy, decision_input)
+    if not egress.allowed and egress.reason:
+        deny_reasons.append(egress.reason)
+        matched.append("egress")
     if deny_reasons:
         return DecisionResult(allow=False, deny_reasons=deny_reasons, matched_rules=matched)
 
     approval_reasons: list[str] = []
+    approval_matched = False
     for approval_rule in policy.require_human_approval:
         if _matches_rule(approval_rule, decision_input):
             matched.append(approval_rule.id)
+            approval_matched = True
             approval_reasons.append(approval_rule.reason or "Action requires human approval")
     if approval_reasons and not decision_input.human_approved:
         return DecisionResult(
@@ -114,6 +129,8 @@ def evaluate_policy(policy: Policy, decision_input: DecisionInput) -> DecisionRe
             deny_reasons=approval_reasons,
             matched_rules=matched,
         )
+    if approval_matched and decision_input.human_approved:
+        return DecisionResult(allow=True, matched_rules=matched)
 
     for allow_rule in policy.allow:
         if _matches_rule(allow_rule, decision_input):
@@ -128,16 +145,33 @@ def evaluate_policy(policy: Policy, decision_input: DecisionInput) -> DecisionRe
 
 
 def run_policy_tests(policy: Policy, positive: list[Event], negative: list[Event]) -> TestResults:
-    policy_hash = hash_policy(policy)
-    positive_results = [_run_case(policy, event, "allow") for event in positive]
-    negative_results = [_run_case(policy, event, _expected_decision(event)) for event in negative]
+    return run_evaluator_tests(
+        policy.task,
+        hash_policy(policy),
+        positive,
+        negative,
+        lambda value: evaluate_policy(policy, value),
+    )
+
+
+def run_evaluator_tests(
+    policy_id: str,
+    policy_hash: str,
+    positive: list[Event],
+    negative: list[Event],
+    evaluator: Callable[[DecisionInput], DecisionResult],
+) -> TestResults:
+    positive_results = [_run_case(event, "allow", evaluator) for event in positive]
+    negative_results = [
+        _run_case(event, _expected_decision(event), evaluator) for event in negative
+    ]
     cases = [
         *zip(positive, positive_results, strict=True),
         *zip(negative, negative_results, strict=True),
     ]
-    receipts = [_receipt(policy, policy_hash, event, result) for event, result in cases]
+    receipts = [_receipt(policy_id, policy_hash, event, result) for event, result in cases]
     return TestResults(
-        policy_id=policy.task,
+        policy_id=policy_id,
         policy_hash=policy_hash,
         positive=positive_results,
         negative=negative_results,
@@ -241,9 +275,16 @@ def _allowed_domains(capabilities: list[Capability]) -> list[str]:
 
 
 def _decision_resource(resource_type: str | None, resource_id: str | None) -> DecisionResource:
-    if resource_id and resource_id.startswith(("http://", "https://")):
+    parsed = urlparse(resource_id or "")
+    if resource_id and parsed.scheme:
         return DecisionResource(
-            type=resource_type, id=resource_id, domain=_domain_from_resource(resource_id)
+            type=resource_type,
+            id=resource_id,
+            scheme=parsed.scheme.lower(),
+            host=(parsed.hostname or "").lower() or None,
+            port=_safe_port(parsed),
+            domain=_domain_from_resource(resource_id),
+            private_network=_private_network_from_resource(resource_id),
         )
     if resource_id and "#" in resource_id and "/" in resource_id:
         repo = resource_id.split("#", 1)[0]
@@ -261,36 +302,6 @@ def _matches_rule(rule: Rule, value: DecisionInput) -> bool:
     if rule.resource and not _resource_matches(rule.resource, value.resource):
         return False
     return _constraints_match(rule.constraints, value)
-
-
-def _matches_when(when: dict[str, Any], value: DecisionInput) -> bool:
-    for key, expected in when.items():
-        if key == "action":
-            if value.action != expected:
-                return False
-        elif key == "input.trust_level":
-            if value.input.trust_level != expected:
-                return False
-        elif key == "input.sensitivity":
-            if value.input.sensitivity != expected:
-                return False
-        elif key == "input.sensitivity_in":
-            has_label = bool(set(value.input.labels).intersection(expected))
-            if value.input.sensitivity not in expected and not has_label:
-                return False
-        elif key == "input.labels_contains":
-            if expected not in value.input.labels:
-                return False
-        elif key == "sink":
-            if value.sink.type != expected:
-                return False
-        elif key == "resource.matches":
-            path = value.resource.path or value.resource.id or ""
-            if not any(fnmatch.fnmatch(path.replace("\\", "/"), pattern) for pattern in expected):
-                return False
-        else:
-            return False
-    return True
 
 
 def _resource_matches(rule_resource: str, resource: DecisionResource) -> bool:
@@ -313,8 +324,10 @@ def _constraints_match(constraints: dict[str, Any], value: DecisionInput) -> boo
     return not (query and value.params.get("query") != query)
 
 
-def _run_case(policy: Policy, event: Event, expected: str) -> TestCaseResult:
-    decision = evaluate_policy(policy, event_to_decision_input(event))
+def _run_case(
+    event: Event, expected: str, evaluator: Callable[[DecisionInput], DecisionResult]
+) -> TestCaseResult:
+    decision = evaluator(event_to_decision_input(event))
     actual = decision.decision
     return TestCaseResult(
         name=event.expected.attack if event.expected and event.expected.attack else event.span_id,
@@ -334,16 +347,16 @@ def _expected_decision(event: Event) -> str:
 
 
 def _receipt(
-    policy: Policy, policy_hash: str, event: Event, result: TestCaseResult
+    policy_id: str, policy_hash: str, event: Event, result: TestCaseResult
 ) -> dict[str, Any]:
-    return {
+    receipt = {
         "receipt_version": "0.1",
         "decision_id": hashlib.sha256(f"{policy_hash}:{event.span_id}".encode()).hexdigest()[:16],
         "timestamp": utc_now(),
         "trace_id": event.trace_id,
         "span_id": event.span_id,
         "decision": "allowed" if result.actual == "allow" else "blocked",
-        "policy_id": policy.task,
+        "policy_id": policy_id,
         "policy_hash": policy_hash,
         "subject": event.actor.id,
         "action": event.operation.action,
@@ -355,13 +368,38 @@ def _receipt(
             }
         ],
     }
+    redacted = redact_json_value(receipt)
+    if not isinstance(redacted, dict):
+        raise TypeError("receipt redaction produced an invalid receipt")
+    return redacted
 
 
 def _domain_from_resource(resource: str | None) -> str | None:
     if not resource:
         return None
     parsed = urlparse(resource)
-    return parsed.hostname
+    return parsed.hostname.lower() if parsed.hostname else None
+
+
+def _safe_port(parsed: Any) -> int | None:
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    return port if isinstance(port, int) else None
+
+
+def _private_network_from_resource(resource: str | None) -> bool:
+    domain = _domain_from_resource(resource)
+    if not domain:
+        return False
+    host = domain.strip("[]").lower()
+    if host in {"localhost", "0"} or host.endswith((".localhost", ".local")):
+        return True
+    try:
+        return not ip_address(host).is_global
+    except ValueError:
+        return False
 
 
 def _normalize_path(path: str) -> str:

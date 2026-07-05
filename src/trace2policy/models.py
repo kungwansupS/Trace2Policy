@@ -23,6 +23,7 @@ class TraceValidationError(Trace2PolicyError):
 
 
 class EventType(StrEnum):
+    AGENT = "agent"
     USER_INPUT = "user_input"
     SYSTEM_INSTRUCTION = "system_instruction"
     LLM_CALL = "llm_call"
@@ -35,6 +36,7 @@ class EventType(StrEnum):
     MCP_TOOL_LIST = "mcp_tool_list"
     MCP_TOOL_CALL = "mcp_tool_call"
     MCP_RESOURCE_READ = "mcp_resource_read"
+    GUARDRAIL = "guardrail"
     HUMAN_APPROVAL = "human_approval"
     POLICY_DECISION = "policy_decision"
     ERROR = "error"
@@ -199,7 +201,11 @@ class DecisionResource(BaseModel):
     id: str | None = None
     repo: str | None = None
     path: str | None = None
+    scheme: str | None = None
+    host: str | None = None
+    port: int | None = None
     domain: str | None = None
+    private_network: bool = False
     visibility: str | None = None
 
 

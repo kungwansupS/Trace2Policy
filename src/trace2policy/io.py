@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
+from trace2policy.conditions import validate_policy_contract
 from trace2policy.models import Event, Policy, TraceValidationError
 
 
@@ -48,6 +49,14 @@ def write_jsonl(path: Path, events: Iterable[Event]) -> None:
             handle.write("\n")
 
 
+def write_jsonl_values(path: Path, values: Iterable[Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        for value in values:
+            json.dump(value, handle, sort_keys=True)
+            handle.write("\n")
+
+
 def load_events(path: Path) -> list[Event]:
     events: list[Event] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -70,7 +79,9 @@ def load_policy(path: Path) -> Policy:
         data = yaml.safe_load(handle)
     if not isinstance(data, dict):
         raise ValueError(f"{path}: policy YAML must be an object")
-    return Policy.model_validate(data)
+    policy = Policy.model_validate(data)
+    validate_policy_contract(policy)
+    return policy
 
 
 def write_policy(path: Path, policy: Policy) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -17,6 +18,7 @@ def test_cli_full_pipeline(tmp_path: Path) -> None:
     policy = tmp_path / "policy.yaml"
     rego = tmp_path / "policy.rego"
     attacks = tmp_path / "attacks.jsonl"
+    decisions = tmp_path / "decisions.jsonl"
     results = tmp_path / "results.json"
     report = tmp_path / "report.md"
 
@@ -34,6 +36,12 @@ def test_cli_full_pipeline(tmp_path: Path) -> None:
         runner.invoke(app, ["emit", str(policy), "--target", "rego", "--out", str(rego)]).exit_code
         == 0
     )
+    assert runner.invoke(app, ["validate-policy", str(policy)]).exit_code == 0
+    assert (
+        runner.invoke(app, ["decision-input", str(normalized), "--out", str(decisions)]).exit_code
+        == 0
+    )
+    assert decisions.read_text(encoding="utf-8").count("\n") == 3
     assert (
         runner.invoke(
             app, ["redteam", "generate", str(normalized), "--out", str(attacks)]
@@ -57,6 +65,25 @@ def test_cli_full_pipeline(tmp_path: Path) -> None:
         ).exit_code
         == 0
     )
+    if shutil.which("opa") is not None:
+        rego_results = tmp_path / "results-rego.json"
+        assert (
+            runner.invoke(
+                app,
+                [
+                    "test",
+                    "--policy",
+                    str(rego),
+                    "--positive",
+                    str(normalized),
+                    "--negative",
+                    str(attacks),
+                    "--out",
+                    str(rego_results),
+                ],
+            ).exit_code
+            == 0
+        )
     assert (
         runner.invoke(
             app, ["report", str(results), "--format", "markdown", "--out", str(report)]
