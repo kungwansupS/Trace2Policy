@@ -8,8 +8,8 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from trace2policy.conditions import validate_policy_contract
-from trace2policy.models import Event, Policy, TraceValidationError
+from tracepolicykit.conditions import validate_policy_contract
+from tracepolicykit.models import Event, Policy, TraceValidationError
 
 
 def read_json_file(path: Path) -> Any:

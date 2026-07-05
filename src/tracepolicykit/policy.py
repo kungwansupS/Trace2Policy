@@ -9,10 +9,10 @@ from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
-from trace2policy.conditions import condition_matches, egress_decision, validate_policy_contract
-from trace2policy.graph import Capability, CapabilityGraph, build_capability_graph
-from trace2policy.labels import is_high_impact_action, is_secret_path
-from trace2policy.models import (
+from tracepolicykit.conditions import condition_matches, egress_decision, validate_policy_contract
+from tracepolicykit.graph import Capability, CapabilityGraph, build_capability_graph
+from tracepolicykit.labels import is_high_impact_action, is_secret_path
+from tracepolicykit.models import (
     DecisionInput,
     DecisionResource,
     DecisionResult,
@@ -25,7 +25,7 @@ from trace2policy.models import (
     TestResults,
     utc_now,
 )
-from trace2policy.redact import redact_json_value
+from tracepolicykit.redact import redact_json_value
 
 SENSITIVE_LABELS = {"credential", "secret", "pii", "customer_data", "financial", "health", "legal"}
 

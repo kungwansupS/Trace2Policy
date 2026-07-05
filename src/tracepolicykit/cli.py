@@ -8,9 +8,9 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from trace2policy.graph import CapabilityGraph, build_capability_graph, graph_to_mermaid
-from trace2policy.ingest import TraceFormat, normalize_trace
-from trace2policy.io import (
+from tracepolicykit.graph import CapabilityGraph, build_capability_graph, graph_to_mermaid
+from tracepolicykit.ingest import TraceFormat, normalize_trace
+from tracepolicykit.io import (
     load_events,
     load_policy,
     read_json_file,
@@ -19,17 +19,17 @@ from trace2policy.io import (
     write_jsonl_values,
     write_policy,
 )
-from trace2policy.models import TestResults
-from trace2policy.policy import (
+from tracepolicykit.models import TestResults
+from tracepolicykit.policy import (
     event_to_decision_input,
     run_evaluator_tests,
     run_policy_tests,
     synthesize_policy,
     synthesize_policy_from_events,
 )
-from trace2policy.redteam import generate_attacks
-from trace2policy.rego import emit_rego, evaluate_rego
-from trace2policy.report import render_html, render_markdown
+from tracepolicykit.redteam import generate_attacks
+from tracepolicykit.rego import emit_rego, evaluate_rego
+from tracepolicykit.report import render_html, render_markdown
 
 app = typer.Typer(no_args_is_help=True, help="Convert AI agent traces into enforceable policies.")
 redteam_app = typer.Typer(no_args_is_help=True, help="Generate offline red-team traces.")

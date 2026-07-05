@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Literal
 
-from trace2policy.models import Event, EventType, ExpectedOutcome
+from tracepolicykit.models import Event, EventType, ExpectedOutcome
 
 AttackName = Literal[
     "indirect_prompt_injection",

@@ -737,8 +737,8 @@ wheels = [
 ]
 
 [[package]]
-name = "trace2policy"
-version = "0.2.0"
+name = "tracepolicykit"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "networkx" },

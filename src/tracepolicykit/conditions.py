@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from trace2policy.models import DecisionInput, Policy, Rule
+from tracepolicykit.models import DecisionInput, Policy, Rule
 
 SUPPORTED_CONDITION_KEYS = frozenset(
     {

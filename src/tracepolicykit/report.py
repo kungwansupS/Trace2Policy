@@ -3,8 +3,8 @@ from __future__ import annotations
 import html
 from collections import Counter
 
-from trace2policy.models import TestResults
-from trace2policy.redact import redact_secret_text
+from tracepolicykit.models import TestResults
+from tracepolicykit.redact import redact_secret_text
 
 
 def render_markdown(results: TestResults) -> str:
@@ -14,7 +14,7 @@ def render_markdown(results: TestResults) -> str:
     missed = [case for case in results.negative if not case.passed]
     decisions = Counter(case.actual for case in [*results.positive, *results.negative])
     lines = [
-        "# Trace2Policy Report",
+        "# TracePolicyKit Report",
         "",
         f"Policy: `{results.policy_id}`",
         f"Policy hash: `{results.policy_hash}`",
@@ -63,6 +63,6 @@ def render_html(results: TestResults) -> str:
     body = html.escape(render_markdown(results))
     return (
         "<!doctype html>\n"
-        '<html><head><meta charset="utf-8"><title>Trace2Policy Report</title></head>'
+        '<html><head><meta charset="utf-8"><title>TracePolicyKit Report</title></head>'
         f"<body><pre>{body}</pre></body></html>\n"
     )

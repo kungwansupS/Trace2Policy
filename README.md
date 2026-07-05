@@ -1,15 +1,15 @@
-# Trace2Policy
+# TracePolicyKit
 
 Convert AI agent traces into enforceable least-privilege policies.
 
-Trace2Policy ingests AI agent traces, normalizes them to a canonical trace IR,
+TracePolicyKit ingests AI agent traces, normalizes them to a canonical trace IR,
 builds a capability graph, synthesizes policy, emits YAML/Rego, generates
 offline red-team mutations, and reports whether the policy blocks those
 mutations.
 
 ## ภาษาไทย
 
-Trace2Policy เป็น CLI สำหรับแปลง trace ของ AI agent ให้เป็น policy แบบ
+TracePolicyKit เป็น CLI สำหรับแปลง trace ของ AI agent ให้เป็น policy แบบ
 least privilege ที่ตรวจสอบซ้ำได้ เหมาะกับงานทดลอง, security review, และการ
 เตรียม policy ก่อนนำ agent ไปใช้กับเครื่องมือจริง
 
@@ -27,8 +27,8 @@ least privilege ที่ตรวจสอบซ้ำได้ เหมาะ
 
 ```bash
 uv sync --all-extras
-uv run trace2policy validate examples/github_issue_triage/traces.normal.jsonl
-uv run trace2policy infer examples/github_issue_triage/traces.normal.jsonl --out policy.yaml
+uv run tracepolicykit validate examples/github_issue_triage/traces.normal.jsonl
+uv run tracepolicykit infer examples/github_issue_triage/traces.normal.jsonl --out policy.yaml
 ```
 
 ค่าเริ่มต้นด้านความปลอดภัย:
@@ -42,7 +42,7 @@ uv run trace2policy infer examples/github_issue_triage/traces.normal.jsonl --out
 
 ## Status
 
-Trace2Policy is alpha software. The v0.2 CLI is usable for local experiments,
+TracePolicyKit is alpha software. The v0.2 CLI is usable for local experiments,
 examples, and policy synthesis research. Public APIs may still change.
 
 ## Install
@@ -51,53 +51,53 @@ Recommended development workflow:
 
 ```bash
 uv sync --all-extras
-uv run trace2policy --help
+uv run tracepolicykit --help
 ```
 
 Fallback:
 
 ```bash
 pip install -e ".[dev,test]"
-trace2policy --help
+tracepolicykit --help
 ```
 
 ## Quickstart
 
 ```bash
-trace2policy validate examples/github_issue_triage/traces.normal.jsonl
+tracepolicykit validate examples/github_issue_triage/traces.normal.jsonl
 
-trace2policy decision-input examples/github_issue_triage/traces.normal.jsonl \
+tracepolicykit decision-input examples/github_issue_triage/traces.normal.jsonl \
   --out decisions.jsonl
 
-trace2policy graph examples/github_issue_triage/traces.normal.jsonl \
+tracepolicykit graph examples/github_issue_triage/traces.normal.jsonl \
   --format mermaid \
   --out graph.md
 
-trace2policy infer examples/github_issue_triage/traces.normal.jsonl \
+tracepolicykit infer examples/github_issue_triage/traces.normal.jsonl \
   --out policy.yaml
 
-trace2policy emit policy.yaml \
+tracepolicykit emit policy.yaml \
   --target rego \
   --out policy.rego
 
-trace2policy validate-policy policy.yaml
+tracepolicykit validate-policy policy.yaml
 
-trace2policy redteam generate examples/github_issue_triage/traces.normal.jsonl \
+tracepolicykit redteam generate examples/github_issue_triage/traces.normal.jsonl \
   --out attacks.jsonl
 
-trace2policy test \
+tracepolicykit test \
   --policy policy.yaml \
   --positive examples/github_issue_triage/traces.normal.jsonl \
   --negative attacks.jsonl \
   --out results.json
 
-trace2policy test \
+tracepolicykit test \
   --policy policy.rego \
   --positive examples/github_issue_triage/traces.normal.jsonl \
   --negative attacks.jsonl \
   --out results-rego.json
 
-trace2policy report results.json \
+tracepolicykit report results.json \
   --format markdown \
   --out report.md
 ```
@@ -106,7 +106,7 @@ trace2policy report results.json \
 
 Supported v0.2 inputs:
 
-- canonical Trace2Policy JSONL
+- canonical TracePolicyKit JSONL
 - OpenInference-like JSON spans
 - Langfuse-like JSON exports
 

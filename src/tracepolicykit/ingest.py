@@ -7,9 +7,9 @@ from typing import Any, Literal
 
 from pydantic import ValidationError
 
-from trace2policy.io import read_json_file, read_jsonl
-from trace2policy.labels import classify_event
-from trace2policy.models import (
+from tracepolicykit.io import read_json_file, read_jsonl
+from tracepolicykit.labels import classify_event
+from tracepolicykit.models import (
     SCHEMA_VERSION,
     Actor,
     DataRef,

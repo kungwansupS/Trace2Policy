@@ -8,19 +8,19 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from trace2policy.conditions import (
+from tracepolicykit.conditions import (
     allowed_domains,
     rego_condition_snippets,
     validate_policy_contract,
 )
-from trace2policy.models import DecisionInput, DecisionResult, Policy
+from tracepolicykit.models import DecisionInput, DecisionResult, Policy
 
 
 def emit_rego(policy: Policy) -> str:
     validate_policy_contract(policy)
     package = re.sub(r"[^a-zA-Z0-9_]", "_", policy.task).strip("_").lower() or "policy"
     lines = [
-        f"package trace2policy.{package}",
+        f"package tracepolicykit.{package}",
         "",
         "import rego.v1",
         "",
@@ -49,7 +49,7 @@ def emit_rego(policy: Policy) -> str:
 def evaluate_rego(rego_source: str, decision_input: DecisionInput) -> DecisionResult:
     if shutil.which("opa") is None:
         raise RuntimeError("opa CLI is not installed")
-    query = "data.trace2policy"
+    query = "data.tracepolicykit"
     with tempfile.TemporaryDirectory() as temp_dir:
         policy_path = Path(temp_dir) / "policy.rego"
         input_path = Path(temp_dir) / "input.json"

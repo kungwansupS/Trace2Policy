@@ -1,6 +1,6 @@
 # Threat Model
 
-Trace2Policy focuses on offline policy synthesis and replay testing for
+TracePolicyKit focuses on offline policy synthesis and replay testing for
 tool-using AI agents.
 
 Security defaults:
