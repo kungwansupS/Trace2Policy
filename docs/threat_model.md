@@ -12,12 +12,13 @@ Security defaults:
 - Never allow untrusted content to trigger code execution.
 - Block external HTTP egress to loopback, link-local, private, or otherwise
   non-global IP literal destinations.
+- Enforce external HTTP domain allowlists without live DNS resolution.
 - Do not store raw secrets in traces.
 - Redact content by default and use content hashes when possible.
 - Treat tool metadata as untrusted unless pinned.
 - Emit auditable decisions.
 
-Out of scope for v0.1:
+Out of scope for v0.2:
 
 - Live runtime firewall enforcement.
 - SaaS dashboard.

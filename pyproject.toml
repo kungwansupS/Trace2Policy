@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trace2policy"
-version = "0.1.0"
+version = "0.2.0"
 description = "Convert AI agent traces into enforceable least-privilege policies."
 readme = "README.md"
 requires-python = ">=3.11"

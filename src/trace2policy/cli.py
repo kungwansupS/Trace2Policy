@@ -16,10 +16,12 @@ from trace2policy.io import (
     read_json_file,
     write_json_file,
     write_jsonl,
+    write_jsonl_values,
     write_policy,
 )
 from trace2policy.models import TestResults
 from trace2policy.policy import (
+    event_to_decision_input,
     run_evaluator_tests,
     run_policy_tests,
     synthesize_policy,
@@ -39,6 +41,28 @@ console = Console()
 def validate(trace: Annotated[Path, typer.Argument(help="Canonical trace JSONL file.")]) -> None:
     events = load_events(trace)
     console.print(f"Validated {len(events)} events")
+
+
+@app.command("validate-policy")
+def validate_policy_command(
+    policy_path: Annotated[Path, typer.Argument(exists=True, readable=True)],
+) -> None:
+    policy = load_policy(policy_path)
+    emit_rego(policy)
+    console.print(f"Validated policy {policy_path}")
+
+
+@app.command("decision-input")
+def decision_input_command(
+    trace: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    out: Annotated[Path, typer.Option("--out")],
+) -> None:
+    decisions = [
+        event_to_decision_input(event).model_dump(mode="json", exclude_none=True)
+        for event in load_events(trace)
+    ]
+    write_jsonl_values(out, decisions)
+    console.print(f"Wrote {len(decisions)} decision inputs to {out}")
 
 
 @app.command()

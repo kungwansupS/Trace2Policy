@@ -1,0 +1,23 @@
+{
+  "observations": [
+    {
+      "traceId": "lf-trace",
+      "id": "obs-generation",
+      "type": "generation",
+      "name": "summarize_ticket",
+      "model": "example-model",
+      "input": {"content_ref": "redacted"},
+      "output": {"content_ref": "redacted"}
+    },
+    {
+      "traceId": "lf-trace",
+      "id": "obs-tool",
+      "parentObservationId": "obs-generation",
+      "type": "span",
+      "name": "github.issue.comment.create",
+      "resourceType": "github.issue",
+      "resourceId": "owner/project#123",
+      "metadata": {"label": "bug"}
+    }
+  ]
+}

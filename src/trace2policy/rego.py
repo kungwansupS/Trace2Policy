@@ -8,10 +8,16 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from trace2policy.conditions import (
+    allowed_domains,
+    rego_condition_snippets,
+    validate_policy_contract,
+)
 from trace2policy.models import DecisionInput, DecisionResult, Policy
 
 
 def emit_rego(policy: Policy) -> str:
+    validate_policy_contract(policy)
     package = re.sub(r"[^a-zA-Z0-9_]", "_", policy.task).strip("_").lower() or "policy"
     lines = [
         f"package trace2policy.{package}",
@@ -19,8 +25,13 @@ def emit_rego(policy: Policy) -> str:
         "import rego.v1",
         "",
         "default allow := false",
+        "default egress_domain_allowed := false",
         "",
+        *_empty_set_guards(),
         *_sensitive_input_helpers(),
+        *_resource_match_helpers(),
+        *_domain_match_helpers(),
+        *_egress_helpers(policy),
     ]
     for deny_rule in policy.deny:
         lines.extend(_deny_rule(deny_rule.id, deny_rule.when, deny_rule.reason))
@@ -78,10 +89,23 @@ def evaluate_rego(rego_source: str, decision_input: DecisionInput) -> DecisionRe
 
 
 def _deny_rule(rule_id: str, when: dict[str, Any], reason: str) -> list[str]:
-    conditions = _when_conditions(when)
+    conditions = rego_condition_snippets(when)
     return [
         f"deny contains {json.dumps(reason)} if {{",
         *[f"  {condition}" for condition in conditions],
+        "}",
+        "",
+    ]
+
+
+def _empty_set_guards() -> list[str]:
+    return [
+        'deny contains "" if {',
+        "  false",
+        "}",
+        "",
+        'requires_approval contains "" if {',
+        "  false",
         "}",
         "",
     ]
@@ -124,33 +148,6 @@ def _rule_match_conditions(rule: dict[str, Any]) -> list[str]:
     return conditions
 
 
-def _when_conditions(when: dict[str, Any]) -> list[str]:
-    conditions: list[str] = []
-    for key, expected in when.items():
-        if key == "action":
-            conditions.append(f"input.action == {json.dumps(expected)}")
-        elif key == "input.trust_level":
-            conditions.append(f"input.input.trust_level == {json.dumps(expected)}")
-        elif key == "input.sensitivity":
-            conditions.append(f"input.input.sensitivity == {json.dumps(expected)}")
-        elif key == "input.sensitivity_in":
-            values = "{" + ", ".join(json.dumps(item) for item in expected) + "}"
-            conditions.append(f"sensitive_input({values})")
-        elif key == "input.labels_contains":
-            conditions.append(f"{json.dumps(expected)} in input.input.labels")
-        elif key == "sink":
-            conditions.append(f"input.sink.type == {json.dumps(expected)}")
-        elif key == "resource.matches":
-            regexes = [_glob_to_regex(pattern) for pattern in expected]
-            conditions.append(
-                "some pattern in [" + ", ".join(json.dumps(regex) for regex in regexes) + "]"
-            )
-            conditions.append("regex.match(pattern, input.resource.path)")
-        elif key == "resource.private_network":
-            conditions.append(f"input.resource.private_network == {json.dumps(expected)}")
-    return conditions or ["false"]
-
-
 def _sensitive_input_helpers() -> list[str]:
     return [
         "sensitive_input(values) if {",
@@ -165,6 +162,92 @@ def _sensitive_input_helpers() -> list[str]:
     ]
 
 
+def _resource_match_helpers() -> list[str]:
+    return [
+        "resource_matches(value) if {",
+        "  input.resource.id == value",
+        "}",
+        "",
+        "resource_matches(value) if {",
+        "  input.resource.type == value",
+        "}",
+        "",
+    ]
+
+
+def _domain_match_helpers() -> list[str]:
+    return [
+        "domain_allowed(domain, pattern) if {",
+        "  domain == pattern",
+        "}",
+        "",
+        "domain_allowed(domain, pattern) if {",
+        '  startswith(pattern, "*.")',
+        '  suffix := trim_prefix(pattern, "*")',
+        "  endswith(domain, suffix)",
+        '  base := trim_prefix(pattern, "*.")',
+        "  domain != base",
+        "}",
+        "",
+    ]
+
+
+def _egress_helpers(policy: Policy) -> list[str]:
+    lines = [
+        "valid_external_http_scheme if {",
+        '  input.resource.scheme == "http"',
+        "}",
+        "",
+        "valid_external_http_scheme if {",
+        '  input.resource.scheme == "https"',
+        "}",
+        "",
+    ]
+    for domain in allowed_domains(policy):
+        if domain.startswith("*."):
+            lines.extend(
+                [
+                    "egress_domain_allowed if {",
+                    f"  endswith(input.resource.domain, {json.dumps(domain[1:])})",
+                    f"  input.resource.domain != {json.dumps(domain[2:])}",
+                    "}",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "egress_domain_allowed if {",
+                    f"  input.resource.domain == {json.dumps(domain)}",
+                    "}",
+                    "",
+                ]
+            )
+    lines.extend(
+        [
+            'deny contains "External HTTP URL scheme is not allowed" if {',
+            '  input.sink.type == "external_http"',
+            "  not valid_external_http_scheme",
+            "}",
+            "",
+            'deny contains "Private network egress is outside task scope" if {',
+            '  input.sink.type == "external_http"',
+            "  valid_external_http_scheme",
+            "  input.resource.private_network == true",
+            "}",
+            "",
+            'deny contains "External HTTP domain is outside policy egress allowlist" if {',
+            '  input.sink.type == "external_http"',
+            "  valid_external_http_scheme",
+            "  input.resource.private_network != true",
+            "  not egress_domain_allowed",
+            "}",
+            "",
+        ]
+    )
+    return lines
+
+
 def _resource_conditions(resource: str) -> list[str]:
     if resource.startswith("github.repo:"):
         return [f"input.resource.repo == {json.dumps(resource.removeprefix('github.repo:'))}"]
@@ -172,9 +255,4 @@ def _resource_conditions(resource: str) -> list[str]:
         return [f"input.resource.domain == {json.dumps(resource.removeprefix('domain:'))}"]
     if resource.endswith("/**"):
         return [f"startswith(input.resource.path, {json.dumps(resource[:-3])})"]
-    return [f"input.resource.id == {json.dumps(resource)}"]
-
-
-def _glob_to_regex(pattern: str) -> str:
-    escaped = re.escape(pattern).replace("\\*\\*", ".*").replace("\\*", "[^/]*")
-    return f"^{escaped}$"
+    return [f"resource_matches({json.dumps(resource)})"]

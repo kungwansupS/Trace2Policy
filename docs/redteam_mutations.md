@@ -1,4 +1,4 @@
-# Red-team Mutations v0.1
+# Red-team Mutations v0.2
 
 Red-team replay mutates normal traces offline and evaluates the generated policy
 against the mutated events.
@@ -13,5 +13,10 @@ Supported attack classes:
 - `confused_deputy`
 - `unsafe_public_write`
 - `secret_read_attempt`
+- `tool_result_spoofing`
+- `url_rewriting`
+- `path_traversal`
+- `approval_bypass`
+- `metadata_service_exfiltration`
 
 Mutations never call live tools, shells, networks, or external services.

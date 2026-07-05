@@ -22,6 +22,8 @@ from trace2policy.report import render_markdown
 
 ROOT = Path(__file__).resolve().parents[1]
 GITHUB_TRACE = ROOT / "examples" / "github_issue_triage" / "traces.normal.jsonl"
+OPENINFERENCE_FIXTURE = ROOT / "tests" / "fixtures" / "openinference_export.json"
+LANGFUSE_FIXTURE = ROOT / "tests" / "fixtures" / "langfuse_export.json"
 EXAMPLES = [
     ROOT / "examples" / "github_issue_triage" / "traces.normal.jsonl",
     ROOT / "examples" / "email_summarizer" / "traces.normal.jsonl",
@@ -66,6 +68,23 @@ def test_openinference_and_langfuse_like_ingest(tmp_path: Path) -> None:
         normalize_trace(openinference, "openinference")[0].operation.action == "github.issue.read"
     )
     assert normalize_trace(langfuse, "langfuse")[0].event_type.value == "llm_call"
+
+
+def test_real_shape_ingest_fixtures_cover_supported_span_kinds() -> None:
+    openinference = normalize_trace(OPENINFERENCE_FIXTURE, "openinference")
+    langfuse = normalize_trace(LANGFUSE_FIXTURE, "langfuse")
+
+    assert [event.event_type.value for event in openinference] == [
+        "agent",
+        "llm_call",
+        "tool_call",
+        "retrieval",
+        "guardrail",
+    ]
+    assert openinference[0].operation.action == "agent.run"
+    assert openinference[-1].operation.action == "guardrail.check"
+    assert langfuse[0].event_type.value == "llm_call"
+    assert langfuse[1].operation.action == "github.issue.comment.create"
 
 
 def test_graph_policy_redteam_and_report_pipeline(tmp_path: Path) -> None:
@@ -146,6 +165,90 @@ def test_private_network_egress_is_denied() -> None:
     assert "Private network egress" in "; ".join(decision.deny_reasons)
 
 
+def test_egress_allowlist_and_url_scheme_policy() -> None:
+    policy = trace_models.Policy(
+        task="egress",
+        allow=[
+            trace_models.Rule(
+                id="allow_http_post",
+                subject="agent:egress",
+                action="http.post",
+            )
+        ],
+        egress={"allowed_domains": ["api.example.com", "*.trusted.example"]},
+    )
+    base = load_events(GITHUB_TRACE)[0].model_copy(deep=True)
+    base.actor.id = "agent:egress"
+    base.operation.system = "http"
+    base.operation.action = "http.post"
+    base.operation.tool_name = "http.post"
+    base.operation.resource_type = "url"
+    base.output.sink = "external_http"
+    base.input.sensitivity = "internal"
+    base.input.labels = []
+
+    exact = base.model_copy(deep=True)
+    exact.operation.resource_id = "https://api.example.com/upload"
+    wildcard = base.model_copy(deep=True)
+    wildcard.operation.resource_id = "https://sub.trusted.example/upload"
+    unknown = base.model_copy(deep=True)
+    unknown.operation.resource_id = "https://evil.example/upload"
+    bad_scheme = base.model_copy(deep=True)
+    bad_scheme.operation.resource_id = "javascript:alert(1)"
+    metadata = base.model_copy(deep=True)
+    metadata.operation.resource_id = "http://169.254.169.254/latest/meta-data/"
+
+    assert evaluate_policy(policy, event_to_decision_input(exact)).decision == "allow"
+    assert evaluate_policy(policy, event_to_decision_input(wildcard)).decision == "allow"
+    assert evaluate_policy(policy, event_to_decision_input(unknown)).decision == "deny"
+    assert "URL scheme" in "; ".join(
+        evaluate_policy(policy, event_to_decision_input(bad_scheme)).deny_reasons
+    )
+    assert "Private network" in "; ".join(
+        evaluate_policy(policy, event_to_decision_input(metadata)).deny_reasons
+    )
+
+
+def test_policy_contract_rejects_unsupported_condition_and_constraint(tmp_path: Path) -> None:
+    invalid_condition = tmp_path / "invalid-condition.yaml"
+    invalid_condition.write_text(
+        """
+schema_version: "0.1"
+task: invalid
+deny:
+  - id: bad
+    when:
+      actor.role: admin
+    reason: bad
+""",
+        encoding="utf-8",
+    )
+    invalid_constraint = trace_models.Policy(
+        task="invalid",
+        allow=[
+            trace_models.Rule(
+                id="bad_constraint",
+                action="file.read",
+                constraints={"unsupported": True},
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="unsupported condition key"):
+        load_policy(invalid_condition)
+    with pytest.raises(ValueError, match="unsupported key"):
+        emit_rego(invalid_constraint)
+
+
+def test_redteam_generates_all_default_attacks() -> None:
+    from trace2policy.redteam import DEFAULT_ATTACKS
+
+    attacks = generate_attacks(load_events(GITHUB_TRACE))
+
+    assert {event.expected.attack for event in attacks if event.expected} == set(DEFAULT_ATTACKS)
+    assert all(event.expected is not None for event in attacks)
+
+
 def test_rego_emitter_contains_v1_policy() -> None:
     policy = synthesize_policy_from_events(load_events(GITHUB_TRACE))
     rego = emit_rego(policy)
@@ -178,13 +281,56 @@ def test_rego_decision_matches_native_evaluator() -> None:
     private_egress = label_only_exfil.model_copy(deep=True)
     private_egress.operation.resource_id = "http://127.0.0.1/admin"
     private_egress.input.labels = []
+    exact_resource_type = events[0].model_copy(deep=True)
+    exact_resource_type.operation.resource_id = None
+    exact_resource_type.operation.resource_type = "github.issue"
 
-    for event in [*events, *attacks, approved, label_only_exfil, private_egress]:
+    for event in [
+        *events,
+        *attacks,
+        approved,
+        label_only_exfil,
+        private_egress,
+        exact_resource_type,
+    ]:
         decision_input = event_to_decision_input(event)
         native = evaluate_policy(policy, decision_input)
         from_rego = evaluate_rego(rego, decision_input)
 
         assert from_rego.decision == native.decision
+
+
+@pytest.mark.skipif(shutil.which("opa") is None, reason="opa CLI is not installed")
+def test_rego_condition_domain_and_scheme_match_native_evaluator() -> None:
+    policy = trace_models.Policy(
+        task="condition_parity",
+        allow=[trace_models.Rule(id="allow_http", subject="agent:egress", action="http.post")],
+        deny=[
+            trace_models.DenyRule(
+                id="deny_bad_domain",
+                when={
+                    "resource.domain_in": ["*.evil.example"],
+                    "resource.scheme_in": ["https"],
+                },
+                reason="Blocked egress domain",
+            )
+        ],
+        egress={"allowed_domains": ["*.evil.example"]},
+    )
+    event = load_events(GITHUB_TRACE)[0].model_copy(deep=True)
+    event.actor.id = "agent:egress"
+    event.operation.system = "http"
+    event.operation.action = "http.post"
+    event.operation.tool_name = "http.post"
+    event.operation.resource_id = "https://sub.evil.example/upload"
+    event.output.sink = "external_http"
+
+    decision_input = event_to_decision_input(event)
+    native = evaluate_policy(policy, decision_input)
+    from_rego = evaluate_rego(emit_rego(policy), decision_input)
+
+    assert native.decision == "deny"
+    assert from_rego.decision == native.decision
 
 
 def test_yaml_loader_rejects_unsafe_constructors(tmp_path: Path) -> None:
@@ -236,7 +382,21 @@ def test_report_redacts_secret_like_values() -> None:
                 expected="deny",
                 actual="allow",
                 passed=False,
-                reasons=["api_key=secret-value should not appear"],
+                reasons=[
+                    "api_key=secret-value should not appear",
+                    "Bearer abcdefghijklmnopqrstuvwxyz",
+                    "AKIA1234567890ABCDEF",
+                    "ghp_abcdefghijklmnopqrstuvwxyz123456",
+                ],
+            )
+        ],
+        positive=[
+            trace_models.TestCaseResult(
+                name="positive",
+                expected="allow",
+                actual="deny",
+                passed=False,
+                reasons=["password=hunter2"],
             )
         ],
     )
@@ -245,4 +405,27 @@ def test_report_redacts_secret_like_values() -> None:
 
     assert "abc123" not in report
     assert "secret-value" not in report
+    assert "hunter2" not in report
+    assert "AKIA1234567890ABCDEF" not in report
+    assert "ghp_" not in report
     assert "[REDACTED_SECRET]" in report
+    assert "Failed Positive Cases" in report
+
+
+def test_policy_test_receipts_are_redacted() -> None:
+    event = load_events(GITHUB_TRACE)[0].model_copy(deep=True)
+    policy = trace_models.Policy(
+        task="receipt_redaction",
+        deny=[
+            trace_models.DenyRule(
+                id="redacted_reason",
+                when={"action": event.operation.action},
+                reason="token=abc123",
+            )
+        ],
+    )
+
+    results = run_policy_tests(policy, [], [event])
+
+    assert "abc123" not in str(results.receipts)
+    assert "[REDACTED_SECRET]" in str(results.receipts)
