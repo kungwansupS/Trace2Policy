@@ -6,7 +6,7 @@ from typing import Any
 import networkx as nx
 from pydantic import BaseModel, Field
 
-from trace2policy.models import Event
+from tracepolicykit.models import Event
 
 
 class Capability(BaseModel):

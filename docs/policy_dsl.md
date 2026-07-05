@@ -1,6 +1,6 @@
 # Policy DSL
 
-Trace2Policy emits a YAML policy before compiling to Rego.
+TracePolicyKit emits a YAML policy before compiling to Rego.
 
 Top-level fields:
 

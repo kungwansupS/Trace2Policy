@@ -9,11 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 SCHEMA_VERSION = "0.1"
 
 
-class Trace2PolicyError(Exception):
+class TracePolicyKitError(Exception):
     """Base exception for user-facing failures."""
 
 
-class TraceValidationError(Trace2PolicyError):
+class TraceValidationError(TracePolicyKitError):
     def __init__(self, path: str, line: int | None, message: str) -> None:
         location = path if line is None else f"{path}:{line}"
         super().__init__(f"{location}: {message}")

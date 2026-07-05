@@ -6,19 +6,19 @@ from pathlib import Path
 import pytest
 import yaml
 
-from trace2policy import models as trace_models
-from trace2policy.graph import build_capability_graph, graph_to_mermaid
-from trace2policy.ingest import normalize_trace
-from trace2policy.io import load_events, load_policy, write_jsonl, write_policy
-from trace2policy.policy import (
+from tracepolicykit import models as trace_models
+from tracepolicykit.graph import build_capability_graph, graph_to_mermaid
+from tracepolicykit.ingest import normalize_trace
+from tracepolicykit.io import load_events, load_policy, write_jsonl, write_policy
+from tracepolicykit.policy import (
     evaluate_policy,
     event_to_decision_input,
     run_policy_tests,
     synthesize_policy_from_events,
 )
-from trace2policy.redteam import generate_attacks
-from trace2policy.rego import emit_rego, evaluate_rego
-from trace2policy.report import render_markdown
+from tracepolicykit.redteam import generate_attacks
+from tracepolicykit.rego import emit_rego, evaluate_rego
+from tracepolicykit.report import render_markdown
 
 ROOT = Path(__file__).resolve().parents[1]
 GITHUB_TRACE = ROOT / "examples" / "github_issue_triage" / "traces.normal.jsonl"
@@ -105,7 +105,7 @@ def test_graph_policy_redteam_and_report_pipeline(tmp_path: Path) -> None:
         rule.action == "github.issue.comment.create" for rule in policy.require_human_approval
     )
     assert results.passed
-    assert "Trace2Policy Report" in report
+    assert "TracePolicyKit Report" in report
 
 
 @pytest.mark.parametrize("trace_path", EXAMPLES)
@@ -241,7 +241,7 @@ deny:
 
 
 def test_redteam_generates_all_default_attacks() -> None:
-    from trace2policy.redteam import DEFAULT_ATTACKS
+    from tracepolicykit.redteam import DEFAULT_ATTACKS
 
     attacks = generate_attacks(load_events(GITHUB_TRACE))
 

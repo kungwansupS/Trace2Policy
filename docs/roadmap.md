@@ -1,6 +1,6 @@
 # Roadmap
 
-Trace2Policy v0.2 is an offline policy synthesis and replay-testing CLI. The
+TracePolicyKit v0.2 is an offline policy synthesis and replay-testing CLI. The
 next work should strengthen correctness, input coverage, and enforcement
 readiness without adding empty modules or premature public plugin APIs.
 

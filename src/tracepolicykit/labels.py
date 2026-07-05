@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-from trace2policy.models import Event, EventType
+from tracepolicykit.models import Event, EventType
 
 SECRET_PATH_PATTERNS = ("**/.env", "**/.env.*", "~/.ssh/**", "**/id_rsa", "**/id_ed25519")
 SECRET_VALUE_RE = re.compile(r"(?i)(api[_-]?key|token|secret|password|credential|private[_-]?key)")

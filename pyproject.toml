@@ -3,8 +3,8 @@ requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "trace2policy"
-version = "0.2.0"
+name = "tracepolicykit"
+version = "0.2.1"
 description = "Convert AI agent traces into enforceable least-privilege policies."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -41,10 +41,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/kungwansupS/Trace2Policy"
-Repository = "https://github.com/kungwansupS/Trace2Policy"
-Documentation = "https://github.com/kungwansupS/Trace2Policy#readme"
-Issues = "https://github.com/kungwansupS/Trace2Policy/issues"
+Homepage = "https://github.com/kungwansupS/TracePolicyKit"
+Repository = "https://github.com/kungwansupS/TracePolicyKit"
+Documentation = "https://github.com/kungwansupS/TracePolicyKit#readme"
+Issues = "https://github.com/kungwansupS/TracePolicyKit/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -59,10 +59,10 @@ test = [
 ]
 
 [project.scripts]
-trace2policy = "trace2policy.cli:app"
+tracepolicykit = "tracepolicykit.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/trace2policy"]
+packages = ["src/tracepolicykit"]
 
 [tool.ruff]
 line-length = 100

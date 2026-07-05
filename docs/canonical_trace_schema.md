@@ -1,6 +1,6 @@
 # Canonical Trace Schema v0.1
 
-Trace2Policy normalizes trace inputs into JSONL. Each line is one event with
+TracePolicyKit normalizes trace inputs into JSONL. Each line is one event with
 `schema_version` set to `0.1`.
 
 Required fields:

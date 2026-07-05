@@ -1,8 +1,8 @@
 # Contributing
 
-Thanks for your interest in Trace2Policy.
+Thanks for your interest in TracePolicyKit.
 
-Trace2Policy v0.1 accepts focused contributions: bug fixes, tests, docs, and
+TracePolicyKit v0.2 accepts focused contributions: bug fixes, tests, docs, and
 small improvements that match the current scope (offline trace-to-policy
 synthesis and replay testing).
 
@@ -10,7 +10,7 @@ synthesis and replay testing).
 
 ```bash
 uv sync --all-extras
-uv run trace2policy --help
+uv run tracepolicykit --help
 ```
 
 Fallback:

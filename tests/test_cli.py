@@ -5,7 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from trace2policy.cli import app
+from tracepolicykit.cli import app
 
 ROOT = Path(__file__).resolve().parents[1]
 GITHUB_TRACE = ROOT / "examples" / "github_issue_triage" / "traces.normal.jsonl"
@@ -90,4 +90,4 @@ def test_cli_full_pipeline(tmp_path: Path) -> None:
         ).exit_code
         == 0
     )
-    assert report.read_text(encoding="utf-8").startswith("# Trace2Policy Report")
+    assert report.read_text(encoding="utf-8").startswith("# TracePolicyKit Report")
